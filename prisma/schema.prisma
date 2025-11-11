@@ -1,0 +1,373 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  name         String
+  email        String       @unique
+  password     String
+  role         String
+  profileImage String?
+  isVerified   Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+
+  activities              Activity[]
+  reservationsActivity    ReservationActivity[]
+  reservationsProperty    ReservationProperty[]
+  reviewsActivity         ReviewActivity[]
+  reviewsProperty         ReviewProperty[]
+  verificationCodes       VerificationCode[]
+  passwordResets          PasswordReset[]
+  properties              Property[]
+  systemLogs              SystemLog[]
+  calendarEvents          CalendarEvent[]
+  hostRequest             HostRequest? 
+}
+
+// Solicitudes para convertirse en Host
+model HostRequest {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Estado de la solicitud
+  status            String    @default("PENDING") // PENDING, IN_REVIEW, APPROVED, REJECTED
+  // Datos iniciales (solicitud básica)
+  initialMessage    String    @db.Text // Mensaje inicial del cliente
+  // Datos del formulario (completado después)
+  motivation        String?   @db.Text // ¿Por qué quiere ser host?
+  experience        String?   @db.Text // Experiencia previa en hospitalidad
+  // Datos de contacto adicionales
+  phone             String?
+  alternativeEmail  String?
+  // Información de propiedad/experiencia
+  hasProperty       Boolean?
+  propertyType      String?   // "HOUSE", "APARTMENT", "CABIN", "ROOM", "EXPERIENCE", "OTHER"
+  propertyAddress   String?
+  propertyCity      String?
+  propertyState     String?
+  estimatedCapacity Int?
+  // Información financiera/legal
+  hasBusinessLicense Boolean  @default(false)
+  taxId             String?   // RFC o Tax ID
+  businessName      String?
+  // Disponibilidad
+  availableFrom     DateTime?
+  // Documentos adjuntos (URLs)
+  identificationDoc String?   // INE/Pasaporte
+  propertyPhotos    String[]  // Fotos de la propiedad
+  additionalDocs    String[]  // Otros documentos
+  // Tracking de la solicitud
+  submittedAt       DateTime  @default(now())
+  reviewedAt        DateTime?
+  reviewedBy        Int?      // ID del empleado/admin que revisó
+  rejectionReason   String?   @db.Text
+  adminNotes        String?   @db.Text
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([status])
+  @@index([submittedAt])
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+}
+
+model VerificationCode {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+// SYSTEM LOGS
+model SystemLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  action      String
+  entity      String
+  entityId    Int?
+  description String   @db.Text
+  ipAddress   String?
+  userAgent   String?  @db.Text
+  createdAt   DateTime @default(now())
+  
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model CalendarEvent {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  eventDate   DateTime
+  endDate     DateTime?
+  location    String?
+  isPublic    Boolean  @default(true)
+  createdBy   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  categories  CalendarEventCategoryRelation[]
+  
+  @@index([eventDate])
+  @@index([createdBy])
+}
+
+model CalendarEventCategoryRelation {
+  id              Int       @id @default(autoincrement())
+  calendarEventId Int
+  categoryId      Int
+  
+  calendarEvent   CalendarEvent    @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  category        ActivityCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@unique([calendarEventId, categoryId])
+  @@index([calendarEventId])
+  @@index([categoryId])
+}
+
+// ACTIVITIES (Experiencias Turísticas)
+model Activity {
+  id            Int             @id @default(autoincrement())
+  userId        Int
+  type          String
+  title         String
+  description   String
+  price         Decimal         @db.Decimal(10,2)
+  capacity      Int
+  availability  Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  eventStartDate DateTime?
+  eventEndDate   DateTime?
+  viewCount      Int            @default(0)
+  duration       String?
+  included       String?        @db.Text
+  address        String?
+  city           String?
+  state          String?
+  latitude       Decimal?       @db.Decimal(10,8)
+  longitude      Decimal?       @db.Decimal(11,8)
+  isFeatured     Boolean        @default(false)
+
+  user          User                    @relation(fields: [userId], references: [id])
+  reservations  ReservationActivity[]
+  reviews       ReviewActivity[]
+  media         MediaActivity[]
+  categories    ActivityCategoryRelation[]
+}
+
+model MediaActivity {
+  id          Int      @id @default(autoincrement())
+  activityId  Int
+  type        String
+  url         String
+  order       Int?
+  description String?
+
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+}
+
+model ReservationActivity {
+  id              Int        @id @default(autoincrement())
+  userId          Int
+  activityId      Int
+  reservationDate DateTime
+  numberOfPeople  Int
+  status          String     @default("pending")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id])
+  activity   Activity   @relation(fields: [activityId], references: [id])
+  payment    PaymentActivity?
+}
+
+model PaymentActivity {
+  id            Int        @id @default(autoincrement())
+  reservationId Int        @unique
+  amount        Decimal    @db.Decimal(10,2)
+  paymentDate   DateTime   @default(now())
+  method        String
+  status        String
+  folio         String?
+
+  reservation   ReservationActivity @relation(fields: [reservationId], references: [id])
+}
+
+model ReviewActivity {
+  id          Int        @id @default(autoincrement())
+  userId      Int
+  activityId  Int
+  rating      Int
+  comment     String?
+  reviewDate  DateTime   @default(now())
+
+  user        User       @relation(fields: [userId], references: [id])
+  activity    Activity   @relation(fields: [activityId], references: [id])
+}
+
+// TABLA DE CATEGORÍAS COMPARTIDA (Para Activities, Properties Y CalendarEvents)
+model ActivityCategory {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  slug        String    @unique
+  type        String    @default("ACTIVITY")  // "ACTIVITY", "PROPERTY", "EVENT" 
+  icon        String?
+  color       String?
+  description String?   @db.Text
+  order       Int?
+  createdAt   DateTime  @default(now())
+  
+  activities      ActivityCategoryRelation[]
+  properties      PropertyCategoryRelation[]
+  calendarEvents  CalendarEventCategoryRelation[] 
+}
+
+model ActivityCategoryRelation {
+  id          Int       @id @default(autoincrement())
+  activityId  Int
+  categoryId  Int
+  
+  activity    Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  category    ActivityCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@unique([activityId, categoryId])
+  @@index([activityId])
+  @@index([categoryId])
+}
+
+model PropertyCategoryRelation {
+  id          Int       @id @default(autoincrement())
+  propertyId  Int
+  categoryId  Int
+  
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  category    ActivityCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@unique([propertyId, categoryId])
+  @@index([propertyId])
+  @@index([categoryId])
+}
+
+// PROPERTIES (Hospedajes)
+model Property {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  title           String
+  description     String    @db.Text
+  type            String
+  price           Decimal   @db.Decimal(10,2)
+  capacity        Int
+  bedrooms        Int
+  bathrooms       Int
+  address         String
+  city            String
+  state           String
+  zipCode         String?
+  latitude        Decimal?  @db.Decimal(10,8)
+  longitude       Decimal?  @db.Decimal(11,8)
+  status          String    @default("PENDING") 
+  availability    Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  viewCount       Int       @default(0)
+  isFeatured      Boolean   @default(false)
+  
+  user            User                    @relation(fields: [userId], references: [id])
+  media           PropertyMedia[]
+  amenities       PropertyAmenity[]
+  reservations    ReservationProperty[]
+  reviews         ReviewProperty[]
+  categories      PropertyCategoryRelation[]
+}
+
+model PropertyMedia {
+  id          Int      @id @default(autoincrement())
+  propertyId  Int
+  type        String
+  url         String
+  order       Int?
+  description String?
+  
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model PropertyAmenity {
+  id          Int      @id @default(autoincrement())
+  propertyId  Int
+  name        String
+  
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model ReservationProperty {
+  id              Int        @id @default(autoincrement())
+  userId          Int
+  propertyId      Int
+  checkIn         DateTime
+  checkOut        DateTime
+  guests          Int
+  totalPrice      Decimal    @db.Decimal(10,2)
+  status          String     @default("pending")
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id])
+  property   Property   @relation(fields: [propertyId], references: [id])
+  payment    PaymentProperty?
+}
+
+model PaymentProperty {
+  id            Int        @id @default(autoincrement())
+  reservationId Int        @unique
+  amount        Decimal    @db.Decimal(10,2)
+  paymentDate   DateTime   @default(now())
+  method        String
+  status        String
+  folio         String?
+
+  reservation   ReservationProperty @relation(fields: [reservationId], references: [id])
+}
+
+model ReviewProperty {
+  id          Int        @id @default(autoincrement())
+  userId      Int
+  propertyId  Int
+  rating      Int
+  comment     String?
+  reviewDate  DateTime   @default(now())
+
+  user        User       @relation(fields: [userId], references: [id])
+  property    Property   @relation(fields: [propertyId], references: [id])
+}
