@@ -3,14 +3,15 @@ import { check, sleep, group } from "k6";
 
 /**
  * K6 Load Test - StayAsBackend (Admin)
- * Flujo:
- * 1) Login admin (setup) -> obtiene token
- * 2) GET /api/users (requiere ADMIN/EMPLOYEE)
  *
- * Variables de entorno:
- * - BASE_URL (obligatorio en CI)
- * - ADMIN_EMAIL (obligatorio en CI)
- * - ADMIN_PASSWORD (obligatorio en CI)
+ * Flujo:
+ *  1) setup() — login admin, obtiene token (1 vez)
+ *  2) default() — GET /api/users con token (por cada VU)
+ *
+ * ENV:
+ *  - BASE_URL       (obligatorio en CI)
+ *  - ADMIN_EMAIL    (obligatorio en CI)
+ *  - ADMIN_PASSWORD (obligatorio en CI)
  */
 
 export const options = {
@@ -26,49 +27,46 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:3000";
+const BASE_URL = (__ENV.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
 const ADMIN_EMAIL = __ENV.ADMIN_EMAIL || "";
 const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || "";
 
 function jsonHeaders(token) {
   const h = { "Content-Type": "application/json" };
   if (token) h.Authorization = `Bearer ${token}`;
-  return h;
+  return { headers: h, timeout: "60s" };
 }
 
 // Se ejecuta 1 vez antes de iniciar los VUs
 export function setup() {
   if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
-    throw new Error("Faltan ADMIN_EMAIL o ADMIN_PASSWORD en variables de entorno.");
+    throw new Error("FATAL: faltan ADMIN_EMAIL o ADMIN_PASSWORD en variables de entorno.");
   }
 
-  const payload = JSON.stringify({
-    email: ADMIN_EMAIL,
-    password: ADMIN_PASSWORD,
-  });
-
-  const res = http.post(`${BASE_URL}/api/auth/login`, payload, {
-    headers: jsonHeaders(),
-    tags: { name: "POST /api/auth/login (setup)" },
-    timeout: "30s",
-  });
+  const res = http.post(
+    `${BASE_URL}/api/auth/login`,
+    JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+    jsonHeaders()
+  );
 
   const ok = check(res, {
-    "login status is 200/201": (r) => [200, 201].includes(r.status),
-    "login returns JSON": (r) =>
+    "setup: login status is 200": (r) => r.status === 200,
+    "setup: login returns JSON": (r) =>
       (r.headers["Content-Type"] || "").includes("application/json"),
   });
 
   if (!ok) {
-    // Esto ayuda a debuggear cuando falla en CI
-    console.error("Login failed:", res.status, res.body);
-    throw new Error("No se pudo autenticar para obtener token.");
+    console.error(`Setup login failed — status: ${res.status} body: ${res.body}`);
+    throw new Error("No se pudo autenticar. Abortando test.");
   }
 
   const body = res.json();
   const token = body.token || body.accessToken || body.jwt || null;
 
-  if (!token) throw new Error("No vino token en la respuesta del login.");
+  if (!token) {
+    console.error("Respuesta del login:", res.body);
+    throw new Error("No vino token en la respuesta del login.");
+  }
 
   return { token };
 }
@@ -77,11 +75,7 @@ export default function (data) {
   const token = data?.token;
 
   group("01 - Admin: List users", () => {
-    const res = http.get(`${BASE_URL}/api/users`, {
-      headers: jsonHeaders(token),
-      tags: { name: "GET /api/users" },
-      timeout: "30s",
-    });
+    const res = http.get(`${BASE_URL}/api/users`, jsonHeaders(token));
 
     check(res, {
       "users status is 200": (r) => r.status === 200,

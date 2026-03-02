@@ -4,15 +4,14 @@ import { check, group, sleep } from "k6";
 /**
  * StayAsBackend - k6 Auth Test (CI-friendly)
  *
- * No hace REGISTER (porque en Render puede timeoutear bajo carga).
  * Flujo:
- *  1) POST /api/auth/login (con usuario real desde secrets)
+ *  1) POST /api/auth/login
  *  2) GET  /api/auth/me (con token)
  *
  * ENV:
- *  - BASE_URL (obligatorio en CI)
- *  - TEST_EMAIL (obligatorio en CI)
- *  - TEST_PASSWORD (obligatorio en CI)
+ *  - BASE_URL      (obligatorio en CI)
+ *  - TEST_EMAIL    (obligatorio en CI) — mapeado desde ADMIN_EMAIL en el workflow
+ *  - TEST_PASSWORD (obligatorio en CI) — mapeado desde ADMIN_PASSWORD en el workflow
  */
 
 export const options = {
@@ -22,17 +21,16 @@ export const options = {
     { duration: "10s", target: 0 },
   ],
   thresholds: {
-    http_req_failed: ["rate<0.10"],      // tolerante para Render/free tier
-    http_req_duration: ["p(95)<3000"],   // 95% debajo de 3s
-    checks: ["rate>0.90"],               // 90% checks ok
+    http_req_failed: ["rate<0.10"],
+    http_req_duration: ["p(95)<3000"],
+    checks: ["rate>0.90"],
   },
 };
 
 const BASE_URL = (__ENV.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
-const EMAIL = __ENV.TEST_EMAIL || "";
-const PASSWORD = __ENV.TEST_PASSWORD || "";
+const EMAIL = __ENV.TEST_EMAIL || __ENV.ADMIN_EMAIL || "";
+const PASSWORD = __ENV.TEST_PASSWORD || __ENV.ADMIN_PASSWORD || "";
 
-// Timeout por request (Render puede ser lento)
 const REQUEST_PARAMS = {
   timeout: "60s",
   headers: { "Content-Type": "application/json" },
@@ -46,8 +44,7 @@ function authHeaders(token) {
 
 export default function () {
   if (!EMAIL || !PASSWORD) {
-    // Si no pusiste secrets en CI, esto te evita “falsos” errores raros
-    check(null, { "Missing TEST_EMAIL/TEST_PASSWORD env vars": () => false });
+    check(null, { "FATAL: faltan TEST_EMAIL/TEST_PASSWORD en secrets": () => false });
     return;
   }
 
@@ -55,18 +52,27 @@ export default function () {
 
   group("01 - Login", () => {
     const payload = JSON.stringify({ email: EMAIL, password: PASSWORD });
-
     const res = http.post(`${BASE_URL}/api/auth/login`, payload, REQUEST_PARAMS);
 
     const ok = check(res, {
-      "login status is 200/201": (r) => [200, 201].includes(r.status),
+      "login status is 200": (r) => r.status === 200,
       "login returns JSON": (r) =>
         (r.headers["Content-Type"] || "").includes("application/json"),
+      "login returns token": (r) => {
+        try {
+          const b = r.json();
+          return !!(b.token || b.accessToken || b.jwt);
+        } catch {
+          return false;
+        }
+      },
     });
 
     if (ok) {
       const body = res.json();
       token = body.token || body.accessToken || body.jwt || "";
+    } else {
+      console.error(`Login failed — status: ${res.status} body: ${res.body}`);
     }
   });
 
