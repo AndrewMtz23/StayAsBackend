@@ -3,40 +3,36 @@ name: k6-load-tests
 on:
   push:
     branches: ["main"]
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   k6:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      # Verificar que BASE_URL llega (útil para debug)
-      - name: Debug BASE_URL
-        run: echo "Running k6 against $BASE_URL"
-        env:
-          BASE_URL: ${{ secrets.BASE_URL }}
-
-      # Ejecutar pruebas de carga
       - name: Run k6 auth test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
+          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
         run: |
-          k6 run tests/k6/stayas-auth.test.js
+          mkdir -p k6-out
+          k6 run --summary-export=k6-out/auth-summary.json tests/k6/stayas-auth.test.js
 
-      # Guardar resultados como artifact
+      - name: Run k6 public test
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: |
+          k6 run --summary-export=k6-out/public-summary.json tests/k6/loadtest.js
+
       - name: Upload k6 summary
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: k6-results
-          path: |
-            *.json
-            *.html
-          if-no-files-found: ignore
+          path: k6-out
