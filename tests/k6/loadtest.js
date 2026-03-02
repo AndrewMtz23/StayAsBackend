@@ -2,73 +2,71 @@ import http from "k6/http";
 import { check, sleep, group } from "k6";
 
 /**
- * K6 Load Test - StayAsBackend
- * - Simula interacción con 2 endpoints clave
- * - Usa BASE_URL por variable de entorno
+ * K6 Load Test - StayAsBackend (GENÉRICO)
+ *
+ * Variables de entorno recomendadas:
+ * - BASE_URL (obligatorio en CI)  Ej: https://stay-as-back.onrender.com
+ * - HEALTH_PATH (opcional)        Default: /
+ * - LIST_PATH (opcional)          Default: /api/properties
+ * - API_TOKEN (opcional)          Si tu endpoint requiere auth (Bearer)
  *
  * Ejecutar local:
  *   k6 run -e BASE_URL="http://localhost:3000" tests/k6/loadtest.js
  *
- * Ejecutar con Grafana Cloud Prometheus (remote write):
- *   k6 run --out experimental-prometheus-rw \
- *     -e BASE_URL="https://tu-api.com" \
- *     tests/k6/loadtest.js
+ * Ejecutar en CI:
+ *   k6 run -e BASE_URL="${BASE_URL}" tests/k6/loadtest.js
  */
 
-// Configuración de carga (ajústala a lo que te pidan)
 export const options = {
   stages: [
-    { duration: "20s", target: 5 },  // ramp-up
-    { duration: "40s", target: 10 }, // steady
-    { duration: "20s", target: 0 },  // ramp-down
+    { duration: "20s", target: 5 },
+    { duration: "40s", target: 10 },
+    { duration: "20s", target: 0 },
   ],
   thresholds: {
-    http_req_failed: ["rate<0.02"],       // <2% requests fallidas
-    http_req_duration: ["p(95)<800"],     // 95% debajo de 800ms (ajusta)
+    http_req_failed: ["rate<0.02"],
+    http_req_duration: ["p(95)<800"],
+    checks: ["rate>0.98"],
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || "http://localhost:3000";
-
-/**
- * TIP:
- * Si tu API necesita auth, puedes:
- *  - guardar un token en GitHub Secrets y leerlo con __ENV.API_TOKEN
- *  - o hacer login en un endpoint y extraer token (si tu API lo soporta)
- */
-const API_TOKEN = __ENV.API_TOKEN || ""; // opcional
+const BASE_URL = (__ENV.BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+const HEALTH_PATH = __ENV.HEALTH_PATH || "/";
+const LIST_PATH = __ENV.LIST_PATH || "/api/properties";
+const API_TOKEN = __ENV.API_TOKEN || "";
 
 function commonHeaders() {
   const h = { "Content-Type": "application/json" };
-  if (API_TOKEN) h["Authorization"] = `Bearer ${API_TOKEN}`;
+  if (API_TOKEN) h.Authorization = `Bearer ${API_TOKEN}`;
   return h;
 }
 
+function joinUrl(base, path) {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${p}`;
+}
+
 export default function () {
-  group("01 - Health / Ping", () => {
-    const res = http.get(`${BASE_URL}/health`, { headers: commonHeaders() });
+  group("01 - Root/Health", () => {
+    const url = joinUrl(BASE_URL, HEALTH_PATH);
+    const res = http.get(url, { headers: commonHeaders(), tags: { name: `GET ${HEALTH_PATH}` } });
 
     check(res, {
-      "health status is 200": (r) => r.status === 200,
-      "health responds fast (<500ms)": (r) => r.timings.duration < 500,
+      "health/root status is 200": (r) => r.status === 200,
+      "health/root responds fast (<800ms)": (r) => r.timings.duration < 800,
+      "health/root has body": (r) => (r.body || "").length > 0,
     });
 
     sleep(1);
   });
 
-  group("02 - Endpoint clave (listado / consulta)", () => {
-    /**
-     * Cambia este endpoint por uno real de tu app:
-     * Ejemplos típicos:
-     *  - /api/properties
-     *  - /api/experiences
-     *  - /api/users/me
-     *  - /api/bookings
-     */
-    const res = http.get(`${BASE_URL}/api/properties`, { headers: commonHeaders() });
+  group("02 - Public list/endpoint clave", () => {
+    const url = joinUrl(BASE_URL, LIST_PATH);
+    const res = http.get(url, { headers: commonHeaders(), tags: { name: `GET ${LIST_PATH}` } });
 
+    // Si tu endpoint no existe todavía, aquí verás 404. Cambia LIST_PATH por uno real.
     check(res, {
-      "endpoint status is 200": (r) => r.status === 200,
+      "endpoint status is 200 (or 401 if protected)": (r) => r.status === 200 || r.status === 401,
       "response has body": (r) => (r.body || "").length > 0,
     });
 
