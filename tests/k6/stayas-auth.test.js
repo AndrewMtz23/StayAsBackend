@@ -10,19 +10,19 @@ import { check, group, sleep } from "k6";
  *
  * ENV:
  *  - BASE_URL      (obligatorio en CI)
- *  - TEST_EMAIL    (obligatorio en CI) — mapeado desde ADMIN_EMAIL en el workflow
- *  - TEST_PASSWORD (obligatorio en CI) — mapeado desde ADMIN_PASSWORD en el workflow
+ *  - TEST_EMAIL    (mapeado desde ADMIN_EMAIL en el workflow)
+ *  - TEST_PASSWORD (mapeado desde ADMIN_PASSWORD en el workflow)
  */
 
 export const options = {
   stages: [
-    { duration: "10s", target: 2 },
+    { duration: "10s", target: 1 },
     { duration: "20s", target: 2 },
     { duration: "10s", target: 0 },
   ],
   thresholds: {
     http_req_failed: ["rate<0.10"],
-    http_req_duration: ["p(95)<60000"],  // 60s — Render free tier tiene cold starts
+    http_req_duration: ["p(95)<60000"], // 60s — Render free tier tiene cold starts
     checks: ["rate>0.90"],
   },
 };

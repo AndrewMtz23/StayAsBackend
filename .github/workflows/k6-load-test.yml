@@ -29,9 +29,16 @@ jobs:
           BASE_URL: ${{ secrets.BASE_URL }}
           TEST_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           TEST_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          K6_PROMETHEUS_RW_SERVER_URL: ${{ secrets.GRAFANA_CLOUD_URL }}
+          K6_PROMETHEUS_RW_USERNAME: ${{ secrets.GRAFANA_CLOUD_USERNAME }}
+          K6_PROMETHEUS_RW_PASSWORD: ${{ secrets.GRAFANA_CLOUD_TOKEN }}
         run: |
           mkdir -p k6-out
-          k6 run --summary-export=k6-out/auth-summary.json tests/k6/stayas-auth.test.js
+          k6 run \
+            --out experimental-prometheus-rw \
+            --tag testid=auth-test \
+            --summary-export=k6-out/auth-summary.json \
+            tests/k6/stayas-auth.test.js
 
       # LOAD TEST — login admin + GET /api/users
       - name: Run k6 load test
@@ -39,8 +46,15 @@ jobs:
           BASE_URL: ${{ secrets.BASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          K6_PROMETHEUS_RW_SERVER_URL: ${{ secrets.GRAFANA_CLOUD_URL }}
+          K6_PROMETHEUS_RW_USERNAME: ${{ secrets.GRAFANA_CLOUD_USERNAME }}
+          K6_PROMETHEUS_RW_PASSWORD: ${{ secrets.GRAFANA_CLOUD_TOKEN }}
         run: |
-          k6 run --summary-export=k6-out/load-summary.json tests/k6/loadtest.js
+          k6 run \
+            --out experimental-prometheus-rw \
+            --tag testid=load-test \
+            --summary-export=k6-out/load-summary.json \
+            tests/k6/loadtest.js
 
       # ARTIFACT — guardar resultados como evidencia descargable
       - name: Upload k6 summary
