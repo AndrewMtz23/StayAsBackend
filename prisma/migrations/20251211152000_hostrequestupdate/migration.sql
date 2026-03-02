@@ -1,0 +1,33 @@
+-- AlterTable
+ALTER TABLE "HostRequest" ADD COLUMN     "accountHolderName" TEXT,
+ADD COLUMN     "backgroundCheckConsent" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "backgroundCheckDate" TIMESTAMP(3),
+ADD COLUMN     "backgroundCheckStatus" TEXT,
+ADD COLUMN     "bankAccountNumber" TEXT,
+ADD COLUMN     "bankName" TEXT,
+ADD COLUMN     "bankStatementDoc" TEXT,
+ADD COLUMN     "cancellationPolicy" TEXT,
+ADD COLUMN     "clabe" TEXT,
+ADD COLUMN     "dateOfBirth" TIMESTAMP(3),
+ADD COLUMN     "emergencyContactName" TEXT,
+ADD COLUMN     "emergencyContactPhone" TEXT,
+ADD COLUMN     "emergencyContactRelation" TEXT,
+ADD COLUMN     "governmentIdNumber" TEXT,
+ADD COLUMN     "hasInsurance" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "insuranceCompany" TEXT,
+ADD COLUMN     "insuranceExpiryDate" TIMESTAMP(3),
+ADD COLUMN     "insurancePolicyNumber" TEXT,
+ADD COLUMN     "languages" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN     "maximumStay" INTEGER,
+ADD COLUMN     "minimumStay" INTEGER,
+ADD COLUMN     "proofOfAddress" TEXT,
+ADD COLUMN     "propertyZipCode" TEXT,
+ADD COLUMN     "responseTime" TEXT,
+ADD COLUMN     "socialMediaLinks" JSONB,
+ADD COLUMN     "termsAccepted" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "termsAcceptedDate" TIMESTAMP(3),
+ADD COLUMN     "websiteUrl" TEXT,
+ALTER COLUMN "hasProperty" SET DEFAULT false;
+
+-- CreateIndex
+CREATE INDEX "HostRequest_backgroundCheckStatus_idx" ON "HostRequest"("backgroundCheckStatus");

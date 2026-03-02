@@ -1,3 +1,4 @@
+// src/services/reservationProperty.service.js
 import {
   findAllPropertyReservations,
   findPropertyReservationById,
@@ -6,6 +7,13 @@ import {
   deletePropertyReservation,
 } from "../models/reservationProperty.model.js";
 import { prisma } from "../config/db.js";
+import {
+  notifyReservationCreated,
+  notifyReservationConfirmed,
+  notifyReservationCancelled,
+  notifyReservationCompleted,
+  notifyHostNewReservation,
+} from "./notification.service.js";
 
 /**
  * Obtener todas las reservaciones de propiedades con filtros
@@ -36,6 +44,9 @@ export async function createPropertyReservationService({
   // Verificar que la propiedad existe y está disponible
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
+    include: {
+      user: { select: { id: true } },
+    },
   });
 
   if (!property) {
@@ -61,7 +72,8 @@ export async function createPropertyReservationService({
   const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
   const totalPrice = Number(property.price) * nights;
 
-  return await createPropertyReservation({
+  // Crear la reservación
+  const reservation = await createPropertyReservation({
     userId,
     propertyId,
     checkIn: checkInDate,
@@ -70,6 +82,28 @@ export async function createPropertyReservationService({
     totalPrice,
     status: "pending",
   });
+
+  // Obtener reservación completa con relaciones
+  const fullReservation = await findPropertyReservationById(reservation.id);
+
+  // 🔔 NOTIFICAR AL CLIENTE
+  try {
+    await notifyReservationCreated(fullReservation, "property");
+  } catch (err) {
+    console.error("Error enviando notificación de reservación creada:", err);
+  }
+
+  // 🔔 NOTIFICAR AL HOST
+  try {
+    const hostId = property.user.id;
+    if (hostId !== userId) {
+      await notifyHostNewReservation(hostId, fullReservation, "property");
+    }
+  } catch (err) {
+    console.error("Error enviando notificación al host:", err);
+  }
+
+  return fullReservation;
 }
 
 /**
@@ -79,14 +113,53 @@ export async function updatePropertyReservationService(id, data) {
   const existing = await findPropertyReservationById(id);
   if (!existing) throw new Error("Reservación no encontrada");
 
-  return await updatePropertyReservation(id, data);
+  const oldStatus = existing.status;
+  const updated = await updatePropertyReservation(id, data);
+  
+  // Obtener reservación actualizada con relaciones
+  const fullReservation = await findPropertyReservationById(id);
+
+  // 🔔 NOTIFICACIONES SEGÚN CAMBIO DE ESTADO
+  if (data.status && data.status !== oldStatus) {
+    try {
+      if (data.status === "confirmed") {
+        await notifyReservationConfirmed(fullReservation, "property");
+      } else if (data.status === "cancelled") {
+        await notifyReservationCancelled(fullReservation, "property", data.cancelReason);
+      } else if (data.status === "completed") {
+        await notifyReservationCompleted(fullReservation, "property");
+      }
+    } catch (err) {
+      console.error("Error enviando notificación de cambio de estado:", err);
+    }
+  }
+
+  return fullReservation;
 }
 
 /**
  * Cancelar una reservación
  */
-export async function cancelPropertyReservationService(id) {
-  return await updatePropertyReservation(id, { status: "cancelled" });
+export async function cancelPropertyReservationService(id, reason) {
+  const reservation = await findPropertyReservationById(id);
+  if (!reservation) throw new Error("Reservación no encontrada");
+
+  const updated = await updatePropertyReservation(id, { 
+    status: "cancelled",
+    cancelReason: reason,
+  });
+
+  // Obtener reservación actualizada
+  const fullReservation = await findPropertyReservationById(id);
+
+  // 🔔 NOTIFICAR CANCELACIÓN
+  try {
+    await notifyReservationCancelled(fullReservation, "property", reason);
+  } catch (err) {
+    console.error("Error enviando notificación de cancelación:", err);
+  }
+
+  return fullReservation;
 }
 
 /**

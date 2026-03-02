@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../config/db.js";
 import {
   logReservationDashboardAccessed,
   logReservationStatsAccessed,
@@ -7,8 +7,6 @@ import {
   logReservationConfirmed,
   logReservationCompleted,
 } from "./log.service.js";
-
-const prisma = new PrismaClient();
 
 // ========================================
 // OBTENER TODAS LAS RESERVACIONES - DASHBOARD

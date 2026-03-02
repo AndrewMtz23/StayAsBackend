@@ -1,4 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../config/db.js";
+import {
+  notifyPaymentApproved,
+  notifyPaymentRejected,
+  notifyPaymentRefunded,
+} from "./notification.service.js";
 import {
   logPaymentCreated,
   logPaymentStatusChanged,
@@ -9,7 +14,6 @@ import {
   logPaymentDashboardAccessed,
 } from "./log.service.js";
 
-const prisma = new PrismaClient();
 
 // ========================================
 // CREAR PAGO
@@ -21,7 +25,6 @@ const prisma = new PrismaClient();
 export async function createActivityPayment(data, req) {
   const { reservationId, amount, method } = data;
 
-  // Verificar que la reservación existe
   const reservation = await prisma.reservationActivity.findUnique({
     where: { id: reservationId },
     include: {
@@ -34,7 +37,6 @@ export async function createActivityPayment(data, req) {
     throw new Error("Reservación no encontrada");
   }
 
-  // Verificar que no tenga pago previo
   const existingPayment = await prisma.paymentActivity.findUnique({
     where: { reservationId },
   });
@@ -43,28 +45,31 @@ export async function createActivityPayment(data, req) {
     throw new Error("Esta reservación ya tiene un pago asociado");
   }
 
-  // Generar folio único
   const folio = `ACT-${Date.now()}-${reservationId}`;
 
-  // Crear el pago
   const payment = await prisma.paymentActivity.create({
     data: {
       reservationId,
       amount,
       method,
-      status: "approved", // Pago aprobado automáticamente (simulado)
+      status: "approved",
       folio,
     },
   });
 
-  // Actualizar el estado de la reservación
   await prisma.reservationActivity.update({
     where: { id: reservationId },
     data: { status: "confirmed" },
   });
 
-  // Log de creación
   await logPaymentCreated(req, payment, "activity", reservation);
+
+  // NOTIFICAR PAGO APROBADO
+  try {
+    await notifyPaymentApproved(payment, reservation, "activity");
+  } catch (err) {
+    console.error("Error enviando notificación de pago aprobado:", err);
+  }
 
   return { payment, reservation };
 }
@@ -75,7 +80,6 @@ export async function createActivityPayment(data, req) {
 export async function createPropertyPayment(data, req) {
   const { reservationId, amount, method } = data;
 
-  // Verificar que la reservación existe
   const reservation = await prisma.reservationProperty.findUnique({
     where: { id: reservationId },
     include: {
@@ -88,7 +92,6 @@ export async function createPropertyPayment(data, req) {
     throw new Error("Reservación no encontrada");
   }
 
-  // Verificar que no tenga pago previo
   const existingPayment = await prisma.paymentProperty.findUnique({
     where: { reservationId },
   });
@@ -97,10 +100,8 @@ export async function createPropertyPayment(data, req) {
     throw new Error("Esta reservación ya tiene un pago asociado");
   }
 
-  // Generar folio único
   const folio = `PROP-${Date.now()}-${reservationId}`;
 
-  // Crear el pago
   const payment = await prisma.paymentProperty.create({
     data: {
       reservationId,
@@ -111,17 +112,24 @@ export async function createPropertyPayment(data, req) {
     },
   });
 
-  // Actualizar el estado de la reservación
   await prisma.reservationProperty.update({
     where: { id: reservationId },
     data: { status: "confirmed" },
   });
 
-  // Log de creación
   await logPaymentCreated(req, payment, "property", reservation);
+
+  // 🔔 NOTIFICAR PAGO APROBADO
+  try {
+    await notifyPaymentApproved(payment, reservation, "property");
+  } catch (err) {
+    console.error("Error enviando notificación de pago aprobado:", err);
+  }
 
   return { payment, reservation };
 }
+
+
 
 // ========================================
 // OBTENER PAGOS - DASHBOARD
@@ -330,17 +338,35 @@ export async function getPaymentById(id, type, req) {
  * Actualizar estado de pago
  */
 export async function updatePaymentStatus(id, type, newStatus, req) {
-  let payment;
+  let payment, reservation;
 
-  // Obtener el pago actual
+  // Obtener el pago con su reservación
   if (type === "activity") {
     payment = await prisma.paymentActivity.findUnique({
       where: { id },
+      include: {
+        reservation: {
+          include: {
+            activity: true,
+            user: true,
+          },
+        },
+      },
     });
+    reservation = payment?.reservation;
   } else {
     payment = await prisma.paymentProperty.findUnique({
       where: { id },
+      include: {
+        reservation: {
+          include: {
+            property: true,
+            user: true,
+          },
+        },
+      },
     });
+    reservation = payment?.reservation;
   }
 
   if (!payment) {
@@ -362,8 +388,18 @@ export async function updatePaymentStatus(id, type, newStatus, req) {
     });
   }
 
-  // Log de cambio de estado
   await logPaymentStatusChanged(req, id, oldStatus, newStatus, type);
+
+  // 🔔 NOTIFICACIONES SEGÚN NUEVO ESTADO
+  try {
+    if (newStatus === "approved" && oldStatus !== "approved") {
+      await notifyPaymentApproved(payment, reservation, type);
+    } else if (newStatus === "rejected") {
+      await notifyPaymentRejected(payment, reservation, type, "El pago no pudo ser procesado");
+    }
+  } catch (err) {
+    console.error("Error enviando notificación de cambio de estado de pago:", err);
+  }
 
   return payment;
 }
@@ -602,26 +638,42 @@ export async function getPaymentStats(req) {
 }
 
 // ========================================
-// REEMBOLSOS
+// REEMBOLSOS - CON NOTIFICACIONES
 // ========================================
 
 /**
  * Reembolsar un pago
  */
 export async function refundPayment(id, type, reason, req) {
-  let payment;
+  let payment, reservation;
 
-  // Obtener el pago
+  // Obtener el pago con su reservación
   if (type === "activity") {
     payment = await prisma.paymentActivity.findUnique({
       where: { id },
-      include: { reservation: true },
+      include: {
+        reservation: {
+          include: {
+            activity: true,
+            user: true,
+          },
+        },
+      },
     });
+    reservation = payment?.reservation;
   } else {
     payment = await prisma.paymentProperty.findUnique({
       where: { id },
-      include: { reservation: true },
+      include: {
+        reservation: {
+          include: {
+            property: true,
+            user: true,
+          },
+        },
+      },
     });
+    reservation = payment?.reservation;
   }
 
   if (!payment) {
@@ -639,7 +691,6 @@ export async function refundPayment(id, type, reason, req) {
       data: { status: "refunded" },
     });
 
-    // Cancelar la reservación
     await prisma.reservationActivity.update({
       where: { id: payment.reservationId },
       data: { status: "cancelled" },
@@ -656,8 +707,14 @@ export async function refundPayment(id, type, reason, req) {
     });
   }
 
-  // Log de reembolso
   await logPaymentRefunded(req, id, payment.amount, type, reason);
+
+  // NOTIFICAR REEMBOLSO
+  try {
+    await notifyPaymentRefunded(payment, reservation, type);
+  } catch (err) {
+    console.error("Error enviando notificación de reembolso:", err);
+  }
 
   return { success: true, message: "Pago reembolsado exitosamente" };
 }

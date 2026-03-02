@@ -1,5 +1,5 @@
 // /backend/src/services/availability.service.js
-import prisma from "../config/prisma.js";
+import { prisma } from "../config/db.js";
 
 /**
  * ========================================

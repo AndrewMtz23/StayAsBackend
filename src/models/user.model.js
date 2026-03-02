@@ -44,7 +44,6 @@ export async function findUserById(id) {
       profileImage: true,
       isVerified: true,
       createdAt: true,
-      // ✅ NUEVO: Incluir solicitud de Host completa
       hostRequest: {
         select: {
           id: true,

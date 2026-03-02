@@ -13,6 +13,11 @@ import reservationsRoutes from "./routes/reservations.routes.js";
 import paymentsRoutes from "./routes/payments.routes.js";
 import adminDashboardRoutes from "./routes/adminDashboard.routes.js";
 import availabilityRoutes from "./routes/availability.routes.js";
+import reviewsRoutes from "./routes/reviews.routes.js";
+import conversationsRoutes from "./routes/conversations.routes.js";
+import notificationsRoutes from "./routes/notifications.routes.js";
+import favoritesRoutes from "./routes/favorites.routes.js";
+
 
 const app = express();
 
@@ -40,6 +45,10 @@ app.use("/api/reservations", reservationsRoutes);
 app.use("/api/payments", paymentsRoutes);
 app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/availability", availabilityRoutes);
+app.use("/api/conversations", conversationsRoutes);
+app.use("/api/notifications", notificationsRoutes);
+app.use("/api/favorites", favoritesRoutes);
+app.use("/api", reviewsRoutes);
 
 app.get("/", (req, res) => {
   res.send("StayAS API funcionando correctamente");

@@ -11,6 +11,7 @@ import {
   logUserDeleted, 
   logUserVerificationChanged 
 } from "../services/log.service.js";
+import { ROLES } from "../utils/roles.js";
 
 /**
  * Obtener todos los usuarios (solo ADMIN)
@@ -33,7 +34,7 @@ export async function getUserById(req, res) {
     const { id } = req.params;
 
     // Si no es admin, solo puede ver su propio perfil
-    if (req.user.role !== "ADMIN" && req.user.id !== Number(id)) {
+    if (req.user.role !== ROLES.ADMIN && req.user.id !== Number(id)) {
       return res.status(403).json({ error: "No tienes permiso para ver este perfil." });
     }
 

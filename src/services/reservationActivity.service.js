@@ -1,3 +1,4 @@
+// src/services/reservationActivity.service.js
 import {
   findAllActivityReservations,
   findActivityReservationById,
@@ -6,6 +7,13 @@ import {
   deleteActivityReservation,
 } from "../models/reservationActivity.model.js";
 import { prisma } from "../config/db.js";
+import {
+  notifyReservationCreated,
+  notifyReservationConfirmed,
+  notifyReservationCancelled,
+  notifyReservationCompleted,
+  notifyHostNewReservation,
+} from "./notification.service.js";
 
 /**
  * Obtener todas las reservaciones de actividades con filtros
@@ -35,6 +43,9 @@ export async function createActivityReservationService({
   // Verificar que la actividad existe y está disponible
   const activity = await prisma.activity.findUnique({
     where: { id: activityId },
+    include: {
+      user: { select: { id: true } },
+    },
   });
 
   if (!activity) {
@@ -49,13 +60,36 @@ export async function createActivityReservationService({
     throw new Error(`La capacidad máxima es de ${activity.capacity} personas`);
   }
 
-  return await createActivityReservation({
+  // Crear la reservación
+  const reservation = await createActivityReservation({
     userId,
     activityId,
     reservationDate: new Date(reservationDate),
     numberOfPeople: Number(numberOfPeople),
     status: "pending",
   });
+
+  // Obtener reservación completa con relaciones
+  const fullReservation = await findActivityReservationById(reservation.id);
+
+  // 🔔 NOTIFICAR AL CLIENTE
+  try {
+    await notifyReservationCreated(fullReservation, "activity");
+  } catch (err) {
+    console.error("Error enviando notificación de reservación creada:", err);
+  }
+
+  // 🔔 NOTIFICAR AL HOST
+  try {
+    const hostId = activity.user.id;
+    if (hostId !== userId) { // No notificar si el host se reserva a sí mismo
+      await notifyHostNewReservation(hostId, fullReservation, "activity");
+    }
+  } catch (err) {
+    console.error("Error enviando notificación al host:", err);
+  }
+
+  return fullReservation;
 }
 
 /**
@@ -65,14 +99,53 @@ export async function updateActivityReservationService(id, data) {
   const existing = await findActivityReservationById(id);
   if (!existing) throw new Error("Reservación no encontrada");
 
-  return await updateActivityReservation(id, data);
+  const oldStatus = existing.status;
+  const updated = await updateActivityReservation(id, data);
+  
+  // Obtener reservación actualizada con relaciones
+  const fullReservation = await findActivityReservationById(id);
+
+  // 🔔 NOTIFICACIONES SEGÚN CAMBIO DE ESTADO
+  if (data.status && data.status !== oldStatus) {
+    try {
+      if (data.status === "confirmed") {
+        await notifyReservationConfirmed(fullReservation, "activity");
+      } else if (data.status === "cancelled") {
+        await notifyReservationCancelled(fullReservation, "activity", data.cancelReason);
+      } else if (data.status === "completed") {
+        await notifyReservationCompleted(fullReservation, "activity");
+      }
+    } catch (err) {
+      console.error("Error enviando notificación de cambio de estado:", err);
+    }
+  }
+
+  return fullReservation;
 }
 
 /**
  * Cancelar una reservación
  */
-export async function cancelActivityReservationService(id) {
-  return await updateActivityReservation(id, { status: "cancelled" });
+export async function cancelActivityReservationService(id, reason) {
+  const reservation = await findActivityReservationById(id);
+  if (!reservation) throw new Error("Reservación no encontrada");
+
+  const updated = await updateActivityReservation(id, { 
+    status: "cancelled",
+    cancelReason: reason,
+  });
+
+  // Obtener reservación actualizada
+  const fullReservation = await findActivityReservationById(id);
+
+  // 🔔 NOTIFICAR CANCELACIÓN
+  try {
+    await notifyReservationCancelled(fullReservation, "activity", reason);
+  } catch (err) {
+    console.error("Error enviando notificación de cancelación:", err);
+  }
+
+  return fullReservation;
 }
 
 /**

@@ -1,3 +1,4 @@
+// RUTA: backend/controllers/activities.controller.js
 import { prisma } from "../config/db.js";
 import {
   createActivityService,
@@ -74,28 +75,44 @@ export async function createActivity(req, res) {
 /**
  * Listar experiencias
  * Soporta filtros: status, search, hostId
+ * ✅ ACTUALIZADO: HOST solo ve sus propias experiencias
  */
 export async function getActivities(req, res) {
   try {
-    const { status, search, hostId } = req.query;
+    const { status, search, hostId, admin } = req.query;
+    const userId = req.user?.id;
+    const role = req.user?.role;
     
     const filters = {};
     
+    // ✅ SOLO filtrar por userId si viene admin=true Y es HOST
+    if (admin === "true" && role === "HOST") {
+      console.log("✅ Panel Admin - HOST ve solo sus experiencias (userId:", userId, ")");
+      filters.userId = userId;
+    }
+    // Si es ADMIN/EMPLOYEE en panel admin, puede filtrar por hostId específico
+    else if (admin === "true" && hostId) {
+      console.log("✅ Panel Admin - Filtrando por hostId:", hostId);
+      filters.userId = parseInt(hostId);
+    }
+    // Si NO viene admin=true, es vista pública - todos ven todo
+    else {
+      console.log("👁️ Vista pública - Mostrando todas las experiencias");
+    }
+    
+    // Filtro de estado
     if (status === 'active') {
       filters.availability = true;
     } else if (status === 'inactive') {
       filters.availability = false;
     }
     
+    // Filtro de búsqueda
     if (search && search.trim()) {
       filters.OR = [
         { title: { contains: search.trim(), mode: 'insensitive' } },
         { description: { contains: search.trim(), mode: 'insensitive' } }
       ];
-    }
-    
-    if (hostId) {
-      filters.userId = parseInt(hostId);
     }
     
     const activities = await getAllActivitiesService(filters);

@@ -1,7 +1,5 @@
 import { createLog } from "../models/log.model.js";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../config/db.js";
 
 /**
  * Registrar una acción en el sistema

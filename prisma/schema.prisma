@@ -1,80 +1,101 @@
+// ============================================
+// SCHEMA.PRISMA - BACKEND STAYAS
+// ============================================
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // url ya NO va aquí en Prisma 7
 }
+
+// ============================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================
 
 model User {
-  id           Int          @id @default(autoincrement())
-  name         String
-  email        String       @unique
-  password     String
-  role         String
-  profileImage String?
-  isVerified   Boolean      @default(false)
-  createdAt    DateTime     @default(now())
+  id                Int       @id @default(autoincrement())
+  name              String
+  email             String    @unique
+  password          String
+  role              String    // ADMIN, EMPLOYEE, HOST, CLIENT
+  profileImage      String?
+  phone             String?
+  bio               String?   @db.Text
+  language          String    @default("es") // es, en
+  currency          String    @default("MXN") // MXN, USD, EUR
+  isVerified        Boolean   @default(false)
+  isActive          Boolean   @default(true)
+  lastLoginAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  activities              Activity[]
-  reservationsActivity    ReservationActivity[]
-  reservationsProperty    ReservationProperty[]
-  reviewsActivity         ReviewActivity[]
-  reviewsProperty         ReviewProperty[]
+  // Relaciones de autenticación
   verificationCodes       VerificationCode[]
   passwordResets          PasswordReset[]
+  twoFactorAuth           TwoFactorAuth?
+
+  // Relaciones de contenido
+  activities              Activity[]
   properties              Property[]
-  systemLogs              SystemLog[]
   calendarEvents          CalendarEvent[]
-  hostRequest             HostRequest? 
+
+  // Relaciones de reservaciones
+  reservationsActivity    ReservationActivity[]
+  reservationsProperty    ReservationProperty[]
+
+  // Relaciones de reseñas
+  reviewsWritten          Review[]              @relation("ReviewAuthor")
+  reviewResponses         ReviewResponse[]
+
+  // Relaciones de chat
+  conversationsAsClient   Conversation[]        @relation("ClientConversations")
+  conversationsAsHost     Conversation[]        @relation("HostConversations")
+  messages                Message[]
+  
+  // Relaciones de notificaciones
+  notifications           Notification[]
+  
+  // Relaciones de favoritos
+  favorites               Favorite[]
+  
+  // Relaciones de e-commerce
+  cart                    Cart?
+  orders                  Order[]
+  couponsCreated          Coupon[]              @relation("CouponCreator")
+  couponsUsed             OrderCoupon[]
+  
+  // Relaciones de programa de referidos
+  referralsGiven          Referral[]            @relation("Referrer")
+  referralsReceived       Referral[]            @relation("Referred")
+  
+  // Relaciones de búsqueda
+  searchHistory           SearchHistory[]
+  
+  // Sistema de solicitudes
+  hostRequest             HostRequest?
+  
+  // Sistema de logs
+  systemLogs              SystemLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
 }
 
-// Solicitudes para convertirse en Host
-model HostRequest {
-  id                Int       @id @default(autoincrement())
-  userId            Int       @unique
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // Estado de la solicitud
-  status            String    @default("PENDING") // PENDING, IN_REVIEW, APPROVED, REJECTED
-  // Datos iniciales (solicitud básica)
-  initialMessage    String    @db.Text // Mensaje inicial del cliente
-  // Datos del formulario (completado después)
-  motivation        String?   @db.Text // ¿Por qué quiere ser host?
-  experience        String?   @db.Text // Experiencia previa en hospitalidad
-  // Datos de contacto adicionales
-  phone             String?
-  alternativeEmail  String?
-  // Información de propiedad/experiencia
-  hasProperty       Boolean?
-  propertyType      String?   // "HOUSE", "APARTMENT", "CABIN", "ROOM", "EXPERIENCE", "OTHER"
-  propertyAddress   String?
-  propertyCity      String?
-  propertyState     String?
-  estimatedCapacity Int?
-  // Información financiera/legal
-  hasBusinessLicense Boolean  @default(false)
-  taxId             String?   // RFC o Tax ID
-  businessName      String?
-  // Disponibilidad
-  availableFrom     DateTime?
-  // Documentos adjuntos (URLs)
-  identificationDoc String?   // INE/Pasaporte
-  propertyPhotos    String[]  // Fotos de la propiedad
-  additionalDocs    String[]  // Otros documentos
-  // Tracking de la solicitud
-  submittedAt       DateTime  @default(now())
-  reviewedAt        DateTime?
-  reviewedBy        Int?      // ID del empleado/admin que revisó
-  rejectionReason   String?   @db.Text
-  adminNotes        String?   @db.Text
+model VerificationCode {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
   
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([userId])
-  @@index([status])
-  @@index([submittedAt])
+  @@index([code])
 }
 
 model PasswordReset {
@@ -90,167 +111,276 @@ model PasswordReset {
   @@index([token])
 }
 
-model VerificationCode {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  code      String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([userId])
-}
-
-// SYSTEM LOGS
-model SystemLog {
+model TwoFactorAuth {
   id          Int      @id @default(autoincrement())
-  userId      Int?
-  action      String
-  entity      String
-  entityId    Int?
-  description String   @db.Text
-  ipAddress   String?
-  userAgent   String?  @db.Text
-  createdAt   DateTime @default(now())
-  
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  
-  @@index([userId])
-  @@index([action])
-  @@index([entity])
-  @@index([createdAt])
-}
-
-model CalendarEvent {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?  @db.Text
-  eventDate   DateTime
-  endDate     DateTime?
-  location    String?
-  isPublic    Boolean  @default(true)
-  createdBy   Int?
+  userId      Int      @unique
+  secret      String
+  isEnabled   Boolean  @default(false)
+  backupCodes String[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  user        User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
-  categories  CalendarEventCategoryRelation[]
-  
-  @@index([eventDate])
-  @@index([createdBy])
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-model CalendarEventCategoryRelation {
-  id              Int       @id @default(autoincrement())
-  calendarEventId Int
-  categoryId      Int
+// ============================================
+// SOLICITUDES DE HOST
+// ============================================
+model HostRequest {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  calendarEvent   CalendarEvent    @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
-  category        ActivityCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  // ESTADO DE LA SOLICITUD
+  status            String    @default("PENDING") // PENDING, IN_REVIEW, APPROVED, REJECTED
   
-  @@unique([calendarEventId, categoryId])
-  @@index([calendarEventId])
-  @@index([categoryId])
+  // FASE 1: SOLICITUD INICIAL
+  initialMessage    String    @db.Text // Mensaje inicial del cliente (mínimo 50 caracteres)
+  
+  // FASE 2: MOTIVACIÓN Y EXPERIENCIA
+  motivation        String?   @db.Text // ¿Por qué quiere ser host? (mínimo 50 caracteres)
+  experience        String?   @db.Text // Experiencia previa en hospitalidad
+  languages         String[]  @default([]) // Idiomas que habla (español, inglés, francés, etc.)
+  
+  // DATOS PERSONALES Y CONTACTO
+  phone             String?   // Teléfono principal (mínimo 10 dígitos)
+  alternativeEmail  String?   // Email alternativo
+  dateOfBirth       DateTime? // Fecha de nacimiento (validar +18 años)
+  governmentIdNumber String?  // Número de INE/IFE/Pasaporte
+  
+  // Contacto de emergencia
+  emergencyContactName  String? // Nombre completo del contacto de emergencia
+  emergencyContactPhone String? // Teléfono del contacto de emergencia
+  emergencyContactRelation String? // Relación (madre, padre, hermano, amigo, etc.)
+  
+  // INFORMACIÓN DE PROPIEDAD/SERVICIO
+  hasProperty       Boolean?  @default(false)
+  propertyType      String?   // "HOUSE", "APARTMENT", "CABIN", "ROOM", "EXPERIENCE", "OTHER"
+  propertyAddress   String?   // Dirección completa
+  propertyCity      String?   // Ciudad
+  propertyState     String?   // Estado
+  propertyZipCode   String?   // Código postal
+  estimatedCapacity Int?      // Capacidad estimada (número de personas)
+  
+  // Operacional
+  minimumStay       Int?      // Estancia mínima (en noches o horas)
+  maximumStay       Int?      // Estancia máxima
+  responseTime      String?   // "instant", "1hour", "24hours", "48hours"
+  cancellationPolicy String?  // "flexible", "moderate", "strict"
+  
+  // INFORMACIÓN FINANCIERA (CRÍTICO)
+  // Cuenta bancaria para recibir pagos
+  bankName          String?   // Nombre del banco (Ej: BBVA, Santander, Banorte)
+  bankAccountNumber String?   // Número de cuenta (encriptado en producción)
+  accountHolderName String?   // Nombre del titular de la cuenta
+  clabe             String?   // CLABE interbancaria (18 dígitos - México)
+  
+  // Fiscal
+  hasBusinessLicense Boolean  @default(false) // ¿Tiene licencia de negocio?
+  taxId             String?   // RFC (México) o Tax ID
+  businessName      String?   // Nombre del negocio (si aplica)
+  
+  // LEGAL Y SEGURIDAD
+  // Verificación de antecedentes
+  backgroundCheckConsent Boolean @default(false) // Consentimiento para verificación
+  backgroundCheckStatus  String? // "pending", "approved", "rejected"
+  backgroundCheckDate    DateTime? // Fecha de verificación
+  
+  // Términos legales
+  termsAccepted     Boolean   @default(false) // Aceptó términos de servicio para hosts
+  termsAcceptedDate DateTime? // Fecha de aceptación
+  
+  // Seguros
+  hasInsurance      Boolean   @default(false) // ¿Tiene seguro de propiedad/responsabilidad?
+  insurancePolicyNumber String? // Número de póliza
+  insuranceCompany  String?   // Compañía aseguradora
+  insuranceExpiryDate DateTime? // Fecha de vencimiento del seguro
+  
+  // MARKETING Y PROMOCIÓN
+  socialMediaLinks  Json?     // { facebook: "url", instagram: "url", twitter: "url" }
+  websiteUrl        String?   // Sitio web del negocio (si tiene)
+  
+  // DISPONIBILIDAD
+  availableFrom     DateTime? // Fecha disponible desde
+  
+  // DOCUMENTOS ADJUNTOS (URLs)
+  identificationDoc String?   // INE/Pasaporte/Identificación oficial (URL)
+  proofOfAddress    String?   // Comprobante de domicilio (URL)
+  propertyPhotos    String[]  // Fotos de la propiedad/espacio (array de URLs)
+  bankStatementDoc  String?   // Estado de cuenta bancario (URL) - para verificar cuenta
+  additionalDocs    String[]  // Otros documentos (contratos, permisos, etc.)
+  
+  // TRACKING Y ADMINISTRACIÓN
+  submittedAt       DateTime  @default(now())
+  reviewedAt        DateTime?
+  reviewedBy        Int?      // ID del empleado/admin que revisó
+  rejectionReason   String?   @db.Text
+  adminNotes        String?   @db.Text
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Índices para optimización
+  @@index([userId])
+  @@index([status])
+  @@index([submittedAt])
+  @@index([backgroundCheckStatus])
 }
 
-// ACTIVITIES (Experiencias Turísticas)
+// ============================================
+// ACTIVIDADES (EXPERIENCIAS)
+// ============================================
+
 model Activity {
-  id            Int             @id @default(autoincrement())
-  userId        Int
-  type          String
-  title         String
-  description   String
-  price         Decimal         @db.Decimal(10,2)
-  capacity      Int
-  availability  Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  type           String    @default("EXPERIENCE")
+  title          String
+  description    String    @db.Text
+  price          Decimal   @db.Decimal(10,2)
+  capacity       Int
+  availability   Boolean   @default(true)
   eventStartDate DateTime?
   eventEndDate   DateTime?
-  viewCount      Int            @default(0)
   duration       String?
-  included       String?        @db.Text
+  included       String?   @db.Text
   address        String?
   city           String?
   state          String?
-  latitude       Decimal?       @db.Decimal(10,8)
-  longitude      Decimal?       @db.Decimal(11,8)
-  isFeatured     Boolean        @default(false)
+  latitude       Decimal?  @db.Decimal(10,8)
+  longitude      Decimal?  @db.Decimal(11,8)
+  viewCount      Int       @default(0)
+  isFeatured     Boolean   @default(false)
+  averageRating  Decimal?  @db.Decimal(3,2)
+  totalReviews   Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  user          User                    @relation(fields: [userId], references: [id])
-  reservations  ReservationActivity[]
-  reviews       ReviewActivity[]
-  media         MediaActivity[]
-  categories    ActivityCategoryRelation[]
+  user           User                     @relation(fields: [userId], references: [id])
+  media          MediaActivity[]
+  categories     ActivityCategoryRelation[]
+  reservations   ReservationActivity[]
+  reviews        Review[]                 @relation("ActivityReviews")
+  favorites      Favorite[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  conversations  Conversation[]
+  
+  @@index([userId])
+  @@index([availability])
+  @@index([isFeatured])
+  @@index([city])
+  @@index([state])
 }
 
 model MediaActivity {
   id          Int      @id @default(autoincrement())
   activityId  Int
-  type        String
+  type        String   @default("IMAGE")
   url         String
   order       Int?
   description String?
 
   activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  
+  @@index([activityId])
 }
 
-model ReservationActivity {
-  id              Int        @id @default(autoincrement())
+// ============================================
+// PROPIEDADES (HOSPEDAJES)
+// ============================================
+
+model Property {
+  id              Int       @id @default(autoincrement())
   userId          Int
-  activityId      Int
-  reservationDate DateTime
-  numberOfPeople  Int
-  status          String     @default("pending")
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-
-  user       User       @relation(fields: [userId], references: [id])
-  activity   Activity   @relation(fields: [activityId], references: [id])
-  payment    PaymentActivity?
+  title           String
+  description     String    @db.Text
+  type            String    // HOUSE, APARTMENT, CABIN, ROOM
+  price           Decimal   @db.Decimal(10,2)
+  capacity        Int
+  bedrooms        Int
+  bathrooms       Int
+  address         String
+  city            String
+  state           String
+  zipCode         String?
+  latitude        Decimal?  @db.Decimal(10,8)
+  longitude       Decimal?  @db.Decimal(11,8)
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  availability    Boolean   @default(true)
+  viewCount       Int       @default(0)
+  isFeatured      Boolean   @default(false)
+  averageRating   Decimal?  @db.Decimal(3,2)
+  totalReviews    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user            User                     @relation(fields: [userId], references: [id])
+  media           PropertyMedia[]
+  amenities       PropertyAmenity[]
+  categories      PropertyCategoryRelation[]
+  reservations    ReservationProperty[]
+  reviews         Review[]                 @relation("PropertyReviews")
+  favorites       Favorite[]
+  cartItems       CartItem[]
+  orderItems      OrderItem[]
+  seasonalPrices  SeasonalPrice[]
+  conversations   Conversation[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([availability])
+  @@index([city])
+  @@index([state])
 }
 
-model PaymentActivity {
-  id            Int        @id @default(autoincrement())
-  reservationId Int        @unique
-  amount        Decimal    @db.Decimal(10,2)
-  paymentDate   DateTime   @default(now())
-  method        String
-  status        String
-  folio         String?
-
-  reservation   ReservationActivity @relation(fields: [reservationId], references: [id])
+model PropertyMedia {
+  id          Int      @id @default(autoincrement())
+  propertyId  Int
+  type        String   @default("IMAGE")
+  url         String
+  order       Int?
+  description String?
+  
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
 }
 
-model ReviewActivity {
-  id          Int        @id @default(autoincrement())
-  userId      Int
-  activityId  Int
-  rating      Int
-  comment     String?
-  reviewDate  DateTime   @default(now())
-
-  user        User       @relation(fields: [userId], references: [id])
-  activity    Activity   @relation(fields: [activityId], references: [id])
+model PropertyAmenity {
+  id          Int      @id @default(autoincrement())
+  propertyId  Int
+  name        String
+  icon        String?
+  
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
 }
 
-// TABLA DE CATEGORÍAS COMPARTIDA (Para Activities, Properties Y CalendarEvents)
+// ============================================
+// CATEGORÍAS (COMPARTIDAS)
+// ============================================
+
 model ActivityCategory {
   id          Int       @id @default(autoincrement())
   name        String    @unique
   slug        String    @unique
-  type        String    @default("ACTIVITY")  // "ACTIVITY", "PROPERTY", "EVENT" 
+  type        String    @default("ACTIVITY") // ACTIVITY, PROPERTY, EVENT
   icon        String?
   color       String?
   description String?   @db.Text
   order       Int?
+  isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   
   activities      ActivityCategoryRelation[]
   properties      PropertyCategoryRelation[]
-  calendarEvents  CalendarEventCategoryRelation[] 
+  calendarEvents  CalendarEventCategoryRelation[]
+  
+  @@index([type])
+  @@index([isActive])
 }
 
 model ActivityCategoryRelation {
@@ -279,56 +409,66 @@ model PropertyCategoryRelation {
   @@index([categoryId])
 }
 
-// PROPERTIES (Hospedajes)
-model Property {
+// ============================================
+// CALENDARIO DE EVENTOS
+// ============================================
+
+model CalendarEvent {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  eventDate   DateTime
+  endDate     DateTime?
+  location    String?
+  isPublic    Boolean  @default(true)
+  createdBy   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User?    @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  categories  CalendarEventCategoryRelation[]
+  
+  @@index([eventDate])
+  @@index([createdBy])
+  @@index([isPublic])
+}
+
+model CalendarEventCategoryRelation {
   id              Int       @id @default(autoincrement())
+  calendarEventId Int
+  categoryId      Int
+  
+  calendarEvent   CalendarEvent    @relation(fields: [calendarEventId], references: [id], onDelete: Cascade)
+  category        ActivityCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@unique([calendarEventId, categoryId])
+  @@index([calendarEventId])
+  @@index([categoryId])
+}
+
+// ============================================
+// RESERVACIONES
+// ============================================
+
+model ReservationActivity {
+  id              Int        @id @default(autoincrement())
   userId          Int
-  title           String
-  description     String    @db.Text
-  type            String
-  price           Decimal   @db.Decimal(10,2)
-  capacity        Int
-  bedrooms        Int
-  bathrooms       Int
-  address         String
-  city            String
-  state           String
-  zipCode         String?
-  latitude        Decimal?  @db.Decimal(10,8)
-  longitude       Decimal?  @db.Decimal(11,8)
-  status          String    @default("PENDING") 
-  availability    Boolean   @default(true)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
-  viewCount       Int       @default(0)
-  isFeatured      Boolean   @default(false)
-  
-  user            User                    @relation(fields: [userId], references: [id])
-  media           PropertyMedia[]
-  amenities       PropertyAmenity[]
-  reservations    ReservationProperty[]
-  reviews         ReviewProperty[]
-  categories      PropertyCategoryRelation[]
-}
+  activityId      Int
+  reservationDate DateTime
+  numberOfPeople  Int
+  status          String     @default("pending") // pending, confirmed, cancelled, completed
+  specialRequests String?    @db.Text
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
-model PropertyMedia {
-  id          Int      @id @default(autoincrement())
-  propertyId  Int
-  type        String
-  url         String
-  order       Int?
-  description String?
+  user       User       @relation(fields: [userId], references: [id])
+  activity   Activity   @relation(fields: [activityId], references: [id])
+  payment    PaymentActivity?
   
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-}
-
-model PropertyAmenity {
-  id          Int      @id @default(autoincrement())
-  propertyId  Int
-  name        String
-  
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@index([activityId])
+  @@index([status])
+  @@index([reservationDate])
 }
 
 model ReservationProperty {
@@ -339,13 +479,41 @@ model ReservationProperty {
   checkOut        DateTime
   guests          Int
   totalPrice      Decimal    @db.Decimal(10,2)
-  status          String     @default("pending")
+  status          String     @default("pending") // pending, confirmed, cancelled, completed
+  specialRequests String?    @db.Text
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   user       User       @relation(fields: [userId], references: [id])
   property   Property   @relation(fields: [propertyId], references: [id])
   payment    PaymentProperty?
+  
+  @@index([userId])
+  @@index([propertyId])
+  @@index([status])
+  @@index([checkIn])
+  @@index([checkOut])
+}
+
+// ============================================
+// PAGOS (LEGACY - MANTENER POR COMPATIBILIDAD)
+// ============================================
+
+model PaymentActivity {
+  id            Int        @id @default(autoincrement())
+  reservationId Int        @unique
+  amount        Decimal    @db.Decimal(10,2)
+  paymentDate   DateTime   @default(now())
+  method        String
+  status        String     // pending, approved, rejected, refunded
+  folio         String?
+  stripePaymentIntent String?
+  metadata      Json?
+
+  reservation   ReservationActivity @relation(fields: [reservationId], references: [id])
+  
+  @@index([status])
+  @@index([paymentDate])
 }
 
 model PaymentProperty {
@@ -354,20 +522,448 @@ model PaymentProperty {
   amount        Decimal    @db.Decimal(10,2)
   paymentDate   DateTime   @default(now())
   method        String
-  status        String
+  status        String     // pending, approved, rejected, refunded
   folio         String?
+  stripePaymentIntent String?
+  metadata      Json?
 
   reservation   ReservationProperty @relation(fields: [reservationId], references: [id])
+  
+  @@index([status])
+  @@index([paymentDate])
 }
 
-model ReviewProperty {
+// ============================================
+// RESEÑAS (UNIFIED)
+// ============================================
+
+model Review {
   id          Int        @id @default(autoincrement())
   userId      Int
-  propertyId  Int
-  rating      Int
-  comment     String?
-  reviewDate  DateTime   @default(now())
+  itemType    String     // "ACTIVITY" | "PROPERTY"
+  activityId  Int?
+  propertyId  Int?
+  rating      Int        // 1-5
+  title       String?
+  comment     String?    @db.Text
+  pros        String?    @db.Text
+  cons        String?    @db.Text
+  images      String[]
+  isVerified  Boolean    @default(false) // Si tiene reservación confirmada
+  helpfulCount Int       @default(0)
+  reportCount  Int       @default(0)
+  isHidden    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  user        User       @relation(fields: [userId], references: [id])
-  property    Property   @relation(fields: [propertyId], references: [id])
+  user        User       @relation("ReviewAuthor", fields: [userId], references: [id])
+  activity    Activity?  @relation("ActivityReviews", fields: [activityId], references: [id], onDelete: Cascade)
+  property    Property?  @relation("PropertyReviews", fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  response    ReviewResponse?
+  helpful     ReviewHelpful[]
+  reports     ReviewReport[]
+  
+  @@index([userId])
+  @@index([activityId])
+  @@index([propertyId])
+  @@index([rating])
+  @@index([isVerified])
+  @@index([createdAt])
+}
+
+model ReviewResponse {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int      @unique
+  userId    Int      // Host que responde
+  response  String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+  
+  @@index([reviewId])
+  @@index([userId])
+}
+
+model ReviewHelpful {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int
+  userId    Int
+  isHelpful Boolean  // true = útil, false = no útil
+  createdAt DateTime @default(now())
+  
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  
+  @@unique([reviewId, userId])
+  @@index([reviewId])
+}
+
+model ReviewReport {
+  id        Int      @id @default(autoincrement())
+  reviewId  Int
+  userId    Int
+  reason    String
+  details   String?  @db.Text
+  status    String   @default("PENDING") // PENDING, REVIEWED, RESOLVED
+  createdAt DateTime @default(now())
+  
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  
+  @@index([reviewId])
+  @@index([status])
+}
+
+// ============================================
+// SISTEMA DE CHAT
+// ============================================
+
+model Conversation {
+  id            Int      @id @default(autoincrement())
+  type          String   // "PROPERTY" | "ACTIVITY" | "SUPPORT"
+  propertyId    Int?
+  activityId    Int?
+  clientId      Int
+  hostId        Int
+  status        String   @default("ACTIVE") // ACTIVE, ARCHIVED, CLOSED
+  lastMessage   String?  @db.Text
+  lastMessageAt DateTime?
+  unreadClient  Int      @default(0)
+  unreadHost    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  client        User     @relation("ClientConversations", fields: [clientId], references: [id])
+  host          User     @relation("HostConversations", fields: [hostId], references: [id])
+  property      Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  activity      Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  messages      Message[]
+  
+  @@index([clientId])
+  @@index([hostId])
+  @@index([status])
+  @@index([propertyId])
+  @@index([activityId])
+}
+
+model Message {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  senderId       Int
+  content        String       @db.Text
+  type           String       @default("TEXT") // TEXT, IMAGE, FILE, SYSTEM
+  fileUrl        String?
+  fileName       String?
+  isRead         Boolean      @default(false)
+  isEdited       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id])
+  
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+// ============================================
+// NOTIFICACIONES
+// ============================================
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String   // MESSAGE, RESERVATION, PAYMENT, REVIEW, SYSTEM, PROMOTION
+  title     String
+  message   String   @db.Text
+  link      String?
+  icon      String?
+  isRead    Boolean  @default(false)
+  priority  String   @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  metadata  Json?
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// ============================================
+// FAVORITOS
+// ============================================
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  itemType  String   // "ACTIVITY" | "PROPERTY"
+  activityId Int?
+  propertyId Int?
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity  Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  property  Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, itemType, activityId, propertyId])
+  @@index([userId])
+  @@index([activityId])
+  @@index([propertyId])
+}
+
+// ============================================
+// E-COMMERCE: CARRITO
+// ============================================
+
+model Cart {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+}
+
+model CartItem {
+  id           Int      @id @default(autoincrement())
+  cartId       Int
+  itemType     String   // "ACTIVITY" | "PROPERTY"
+  activityId   Int?
+  propertyId   Int?
+  selectedDate DateTime?
+  checkIn      DateTime?
+  checkOut     DateTime?
+  guests       Int      @default(1)
+  price        Decimal  @db.Decimal(10,2)
+  createdAt    DateTime @default(now())
+  
+  cart         Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  activity     Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  property     Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([cartId])
+  @@index([activityId])
+  @@index([propertyId])
+}
+
+// ============================================
+// E-COMMERCE: ÓRDENES
+// ============================================
+
+model Order {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  orderNumber     String   @unique
+  status          String   @default("PENDING") // PENDING, PROCESSING, CONFIRMED, CANCELLED, REFUNDED
+  subtotal        Decimal  @db.Decimal(10,2)
+  tax             Decimal  @db.Decimal(10,2) @default(0)
+  discount        Decimal  @db.Decimal(10,2) @default(0)
+  total           Decimal  @db.Decimal(10,2)
+  paymentMethod   String?
+  paymentStatus   String?  @default("PENDING") // PENDING, PAID, FAILED, REFUNDED
+  stripePaymentIntent String?
+  notes           String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  payment         OrderPayment?
+  coupons         OrderCoupon[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id           Int      @id @default(autoincrement())
+  orderId      Int
+  itemType     String   // "ACTIVITY" | "PROPERTY"
+  activityId   Int?
+  propertyId   Int?
+  title        String
+  description  String?  @db.Text
+  selectedDate DateTime?
+  checkIn      DateTime?
+  checkOut     DateTime?
+  guests       Int
+  unitPrice    Decimal  @db.Decimal(10,2)
+  quantity     Int      @default(1)
+  subtotal     Decimal  @db.Decimal(10,2)
+  
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  activity     Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  property     Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  
+  @@index([orderId])
+  @@index([activityId])
+  @@index([propertyId])
+}
+
+model OrderPayment {
+  id                  Int      @id @default(autoincrement())
+  orderId             Int      @unique
+  amount              Decimal  @db.Decimal(10,2)
+  paymentMethod       String   // STRIPE, PAYPAL, MERCADOPAGO, CASH
+  status              String   // PENDING, COMPLETED, FAILED, REFUNDED
+  stripePaymentIntent String?
+  stripeClientSecret  String?
+  metadata            Json?
+  paidAt              DateTime?
+  refundedAt          DateTime?
+  createdAt           DateTime @default(now())
+  
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  @@index([orderId])
+  @@index([status])
+}
+
+// ============================================
+// CUPONES Y DESCUENTOS
+// ============================================
+
+model Coupon {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  description   String
+  type          String   // PERCENTAGE, FIXED_AMOUNT, FREE_SHIPPING
+  value         Decimal  @db.Decimal(10,2)
+  minPurchase   Decimal? @db.Decimal(10,2)
+  maxDiscount   Decimal? @db.Decimal(10,2)
+  validFrom     DateTime
+  validUntil    DateTime
+  usageLimit    Int?
+  usedCount     Int      @default(0)
+  isActive      Boolean  @default(true)
+  appliesTo     String   @default("ALL") // ALL, ACTIVITY, PROPERTY
+  createdBy     Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  creator       User?    @relation("CouponCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  orders        OrderCoupon[]
+  
+  @@index([code])
+  @@index([isActive])
+  @@index([validFrom])
+  @@index([validUntil])
+}
+
+model OrderCoupon {
+  id          Int     @id @default(autoincrement())
+  orderId     Int
+  couponId    Int
+  userId      Int
+  discount    Decimal @db.Decimal(10,2)
+  appliedAt   DateTime @default(now())
+  
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  coupon      Coupon  @relation(fields: [couponId], references: [id])
+  user        User    @relation(fields: [userId], references: [id])
+  
+  @@unique([orderId, couponId])
+  @@index([orderId])
+  @@index([couponId])
+}
+
+// ============================================
+// PRECIOS DINÁMICOS / TEMPORADAS
+// ============================================
+
+model SeasonalPrice {
+  id         Int      @id @default(autoincrement())
+  propertyId Int
+  name       String   // "Temporada alta", "Fin de semana", "Festivos"
+  startDate  DateTime
+  endDate    DateTime
+  priceType  String   // PERCENTAGE, FIXED
+  value      Decimal  @db.Decimal(10,2)
+  priority   Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@index([propertyId])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+// ============================================
+// PROGRAMA DE REFERIDOS
+// ============================================
+
+model Referral {
+  id           Int      @id @default(autoincrement())
+  referrerId   Int
+  referredId   Int?
+  code         String   @unique
+  email        String?
+  status       String   @default("PENDING") // PENDING, COMPLETED, EXPIRED
+  rewardType   String?  // DISCOUNT, CREDIT, POINTS
+  rewardValue  Decimal? @db.Decimal(10,2)
+  isUsed       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
+  expiresAt    DateTime?
+  
+  referrer     User     @relation("Referrer", fields: [referrerId], references: [id])
+  referred     User?    @relation("Referred", fields: [referredId], references: [id])
+  
+  @@index([referrerId])
+  @@index([referredId])
+  @@index([code])
+  @@index([status])
+}
+
+// ============================================
+// HISTORIAL DE BÚSQUEDAS
+// ============================================
+
+model SearchHistory {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  query     String
+  filters   Json?
+  results   Int
+  itemType  String?  // ACTIVITY, PROPERTY
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================
+// SISTEMA DE LOGS
+// ============================================
+
+model SystemLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  action      String
+  entity      String
+  entityId    Int?
+  description String   @db.Text
+  ipAddress   String?
+  userAgent   String?  @db.Text
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
 }

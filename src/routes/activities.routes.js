@@ -1,3 +1,4 @@
+// RUTA: backend/routes/activities.routes.js
 import express from "express";
 import { verifyToken, checkRole } from "../middlewares/auth.middleware.js";
 import { ROLES } from "../utils/roles.js";
@@ -19,9 +20,20 @@ const router = express.Router();
 
 /**
  * GET /api/experiences
- * Público: listado de experiencias
+ * Listado de experiencias
+ * - SIN TOKEN: Vista pública (todos ven todo) - Para la tienda
+ * - CON TOKEN + ?admin=true: Panel de administración
+ *   - HOST: Solo ve sus experiencias
+ *   - ADMIN/EMPLOYEE: Ve todas
  */
-router.get("/", getActivities);
+router.get("/", (req, res, next) => {
+  // Si hay token, verificarlo
+  if (req.headers.authorization) {
+    return verifyToken(req, res, next);
+  }
+  // Si no hay token, continuar sin req.user (público)
+  next();
+}, getActivities);
 
 /**
  * GET /api/experiences/:id

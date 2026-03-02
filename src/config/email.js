@@ -44,7 +44,7 @@ export async function sendVerificationEmail(email, name, code) {
           </div>
           <div class="content">
             <h2>¡Hola ${name}!</h2>
-            <p>Gracias por registrarte en el Portal de Ayuntamiento de Arroyo Seco.</p>
+            <p>Gracias por registrarte en el Portal de Hospedajes de Arroyo Seco.</p>
             <p>Para completar tu registro, por favor usa el siguiente código de verificación:</p>
             
             <div class="code-box">
@@ -55,7 +55,7 @@ export async function sendVerificationEmail(email, name, code) {
             <p>Si no solicitaste este registro, puedes ignorar este correo.</p>
           </div>
           <div class="footer">
-            <p>Ayuntamiento 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
+            <p>Hospedajes 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
           </div>
         </div>
       </body>
@@ -124,7 +124,7 @@ export async function sendPasswordResetEmail(email, name, resetLink) {
             <p><small style="word-break: break-all; color: #666;">${resetLink}</small></p>
           </div>
           <div class="footer">
-            <p>Ayuntamiento 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
+            <p>Hospedajes 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
           </div>
         </div>
       </body>
@@ -197,7 +197,7 @@ export async function sendHostRequestNotification(userName, userEmail, message) 
             <p><small>Accede al panel para revisar la solicitud y enviar el formulario de aplicación.</small></p>
           </div>
           <div class="footer">
-            <p>Ayuntamiento 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
+            <p>Hospedajes 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
           </div>
         </div>
       </body>
@@ -271,7 +271,7 @@ export async function sendHostApplicationForm(email, name, formLink) {
             <p><small style="word-break: break-all; color: #666;">${formLink}</small></p>
           </div>
           <div class="footer">
-            <p>Ayuntamiento 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
+            <p>Hospedajes 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
           </div>
         </div>
       </body>
@@ -344,7 +344,7 @@ export async function sendHostRequestApproved(email, name) {
             <p>Estamos emocionados de tenerte en nuestra comunidad de Hosts. Si tienes alguna pregunta, nuestro equipo está aquí para ayudarte.</p>
           </div>
           <div class="footer">
-            <p>Ayuntamiento 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
+            <p>Hospedajes 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
           </div>
         </div>
       </body>
@@ -411,7 +411,7 @@ export async function sendHostRequestRejected(email, name, reason) {
             <p>Valoramos tu interés y esperamos poder trabajar contigo en el futuro.</p>
           </div>
           <div class="footer">
-            <p>Ayuntamiento 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
+            <p>Hospedajes 2024-2027 | © 2025 Arroyo Seco, Querétaro</p>
           </div>
         </div>
       </body>

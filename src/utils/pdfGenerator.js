@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * 📄 Generar PDF elegante y alineado profesionalmente
+ * Generar PDF elegante y alineado profesionalmente
  */
 export function generatePaymentPDF(payment, reservation, type) {
   return new Promise(async (resolve, reject) => {
