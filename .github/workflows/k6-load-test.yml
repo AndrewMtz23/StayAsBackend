@@ -16,6 +16,13 @@ jobs:
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
+      # WARM UP — despierta el servidor de Render antes de los tests
+      - name: Warm up API (Render cold start)
+        run: |
+          echo "Warming up API..."
+          curl -s --max-time 60 ${{ secrets.BASE_URL }} || true
+          sleep 5
+
       # AUTH TEST — login + /api/auth/me
       - name: Run k6 auth test
         env:
@@ -27,13 +34,13 @@ jobs:
           k6 run --summary-export=k6-out/auth-summary.json tests/k6/stayas-auth.test.js
 
       # LOAD TEST — login admin + GET /api/users
-      - name: Run k6 public test
+      - name: Run k6 load test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
-          k6 run --summary-export=k6-out/public-summary.json tests/k6/loadtest.js
+          k6 run --summary-export=k6-out/load-summary.json tests/k6/loadtest.js
 
       # ARTIFACT — guardar resultados como evidencia descargable
       - name: Upload k6 summary
