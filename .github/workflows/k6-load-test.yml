@@ -32,10 +32,11 @@ jobs:
           K6_PROMETHEUS_RW_SERVER_URL: ${{ secrets.GRAFANA_CLOUD_URL }}
           K6_PROMETHEUS_RW_USERNAME: ${{ secrets.GRAFANA_CLOUD_USERNAME }}
           K6_PROMETHEUS_RW_PASSWORD: ${{ secrets.GRAFANA_CLOUD_TOKEN }}
+          K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "false"
         run: |
           mkdir -p k6-out
           k6 run \
-            --out experimental-prometheus-rw \
+            --out prometheus-rw \
             --tag testid=auth-test \
             --summary-export=k6-out/auth-summary.json \
             tests/k6/stayas-auth.test.js
@@ -49,9 +50,10 @@ jobs:
           K6_PROMETHEUS_RW_SERVER_URL: ${{ secrets.GRAFANA_CLOUD_URL }}
           K6_PROMETHEUS_RW_USERNAME: ${{ secrets.GRAFANA_CLOUD_USERNAME }}
           K6_PROMETHEUS_RW_PASSWORD: ${{ secrets.GRAFANA_CLOUD_TOKEN }}
+          K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "false"
         run: |
           k6 run \
-            --out experimental-prometheus-rw \
+            --out prometheus-rw \
             --tag testid=load-test \
             --summary-export=k6-out/load-summary.json \
             tests/k6/loadtest.js
