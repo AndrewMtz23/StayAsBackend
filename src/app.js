@@ -19,6 +19,7 @@ import notificationsRoutes from "./routes/notifications.routes.js";
 import favoritesRoutes from "./routes/favorites.routes.js";
 
 
+
 const app = express();
 
 // CORS debe permitir tu frontend
