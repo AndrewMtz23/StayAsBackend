@@ -2,17 +2,22 @@ import http from "k6/http";
 import { check, sleep, group } from "k6";
 
 /**
- * K6 Load Test - StayAsBackend
- * ENV:
- *  - BASE_URL
- *  - API_TOKEN (opcional si quieres pegar endpoints protegidos)
+ * K6 Load Test - StayAsBackend (Admin)
+ * Flujo:
+ * 1) Login admin (setup) -> obtiene token
+ * 2) GET /api/users (requiere ADMIN/EMPLOYEE)
+ *
+ * Variables de entorno:
+ * - BASE_URL (obligatorio en CI)
+ * - ADMIN_EMAIL (obligatorio en CI)
+ * - ADMIN_PASSWORD (obligatorio en CI)
  */
 
 export const options = {
   stages: [
-    { duration: "15s", target: 3 },
-    { duration: "30s", target: 3 },
-    { duration: "15s", target: 0 },
+    { duration: "10s", target: 1 },
+    { duration: "20s", target: 2 },
+    { duration: "10s", target: 0 },
   ],
   thresholds: {
     http_req_failed: ["rate<0.10"],
@@ -21,33 +26,68 @@ export const options = {
   },
 };
 
-const BASE_URL = (__ENV.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
-const API_TOKEN = __ENV.API_TOKEN || "";
+const BASE_URL = __ENV.BASE_URL || "http://localhost:3000";
+const ADMIN_EMAIL = __ENV.ADMIN_EMAIL || "";
+const ADMIN_PASSWORD = __ENV.ADMIN_PASSWORD || "";
 
-function commonHeaders() {
+function jsonHeaders(token) {
   const h = { "Content-Type": "application/json" };
-  if (API_TOKEN) h.Authorization = `Bearer ${API_TOKEN}`;
-  return { headers: h, timeout: "60s" };
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
 }
 
-export default function () {
-  group("01 - Ping (/)", () => {
-    const res = http.get(`${BASE_URL}/`, commonHeaders());
+// Se ejecuta 1 vez antes de iniciar los VUs
+export function setup() {
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    throw new Error("Faltan ADMIN_EMAIL o ADMIN_PASSWORD en variables de entorno.");
+  }
 
-    check(res, {
-      "ping status is 200": (r) => r.status === 200,
-    });
-
-    sleep(1);
+  const payload = JSON.stringify({
+    email: ADMIN_EMAIL,
+    password: ADMIN_PASSWORD,
   });
 
-  group("02 - Public endpoint example", () => {
-    // Ajusta este endpoint a uno que de verdad exista y sea PUBLICO
-    // Si /api/properties requiere auth, te va a fallar.
-    const res = http.get(`${BASE_URL}/api/properties`, commonHeaders());
+  const res = http.post(`${BASE_URL}/api/auth/login`, payload, {
+    headers: jsonHeaders(),
+    tags: { name: "POST /api/auth/login (setup)" },
+    timeout: "30s",
+  });
+
+  const ok = check(res, {
+    "login status is 200/201": (r) => [200, 201].includes(r.status),
+    "login returns JSON": (r) =>
+      (r.headers["Content-Type"] || "").includes("application/json"),
+  });
+
+  if (!ok) {
+    // Esto ayuda a debuggear cuando falla en CI
+    console.error("Login failed:", res.status, res.body);
+    throw new Error("No se pudo autenticar para obtener token.");
+  }
+
+  const body = res.json();
+  const token = body.token || body.accessToken || body.jwt || null;
+
+  if (!token) throw new Error("No vino token en la respuesta del login.");
+
+  return { token };
+}
+
+export default function (data) {
+  const token = data?.token;
+
+  group("01 - Admin: List users", () => {
+    const res = http.get(`${BASE_URL}/api/users`, {
+      headers: jsonHeaders(token),
+      tags: { name: "GET /api/users" },
+      timeout: "30s",
+    });
 
     check(res, {
-      "endpoint status is 200/204/404": (r) => [200, 204, 404].includes(r.status),
+      "users status is 200": (r) => r.status === 200,
+      "users returns JSON": (r) =>
+        (r.headers["Content-Type"] || "").includes("application/json"),
+      "users has body": (r) => (r.body || "").length > 0,
     });
 
     sleep(1);

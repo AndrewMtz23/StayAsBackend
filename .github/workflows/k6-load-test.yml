@@ -3,11 +3,12 @@ name: k6-load-tests
 on:
   push:
     branches: ["main"]
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   k6:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -15,15 +16,17 @@ jobs:
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
+      # AUTH TEST
       - name: Run k6 auth test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
-          TEST_EMAIL: ${{ secrets.TEST_EMAIL }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
           mkdir -p k6-out
           k6 run --summary-export=k6-out/auth-summary.json tests/k6/stayas-auth.test.js
 
+      # PUBLIC TEST
       - name: Run k6 public test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
@@ -31,6 +34,7 @@ jobs:
         run: |
           k6 run --summary-export=k6-out/public-summary.json tests/k6/loadtest.js
 
+      # ARTIFACT
       - name: Upload k6 summary
         uses: actions/upload-artifact@v4
         with:
