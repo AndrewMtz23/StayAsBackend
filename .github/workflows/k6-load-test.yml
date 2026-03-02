@@ -36,7 +36,7 @@ jobs:
         run: |
           mkdir -p k6-out
           k6 run \
-            --out prometheus-rw \
+            --out experimental-prometheus-rw \
             --tag testid=auth-test \
             --summary-export=k6-out/auth-summary.json \
             tests/k6/stayas-auth.test.js
@@ -53,7 +53,7 @@ jobs:
           K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "false"
         run: |
           k6 run \
-            --out prometheus-rw \
+            --out experimental-prometheus-rw \
             --tag testid=load-test \
             --summary-export=k6-out/load-summary.json \
             tests/k6/loadtest.js
