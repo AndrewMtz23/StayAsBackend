@@ -1,4 +1,4 @@
-name: k6-load-tests
+name: CI Pipeline (k6 + SonarQube)
 
 on:
   push:
@@ -6,24 +6,59 @@ on:
   workflow_dispatch:
 
 jobs:
-  k6:
+
+  # -----------------------------
+  # SAST — SonarQube
+  # -----------------------------
+  sonar:
+    name: SonarQube SAST Analysis
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=sast-project
+            -Dsonar.sources=.
+
+      - name: Check Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # -----------------------------
+  # PERFORMANCE — k6
+  # -----------------------------
+  k6:
+    name: k6 Load Tests
+    runs-on: ubuntu-latest
+    needs: sonar
+
+    steps:
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      # WARM UP — despierta el servidor de Render antes de los tests
+      # WARM UP — despierta el servidor
       - name: Warm up API (Render cold start)
         run: |
           echo "Warming up API..."
           curl -s --max-time 60 ${{ secrets.BASE_URL }} || true
           sleep 5
 
-      # AUTH TEST — login + /api/auth/me
+      # AUTH TEST
       - name: Run k6 auth test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
@@ -41,7 +76,7 @@ jobs:
             --summary-export=k6-out/auth-summary.json \
             tests/k6/stayas-auth.test.js
 
-      # LOAD TEST — login admin + GET /api/users
+      # LOAD TEST
       - name: Run k6 load test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
@@ -58,7 +93,7 @@ jobs:
             --summary-export=k6-out/load-summary.json \
             tests/k6/loadtest.js
 
-      # ARTIFACT — guardar resultados como evidencia descargable
+      # ARTIFACT — guardar resultados
       - name: Upload k6 summary
         if: always()
         uses: actions/upload-artifact@v4
