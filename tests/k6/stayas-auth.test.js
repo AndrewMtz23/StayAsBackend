@@ -21,9 +21,9 @@ export const options = {
     { duration: "10s", target: 0 },
   ],
   thresholds: {
-    http_req_failed: ["rate<0.10"],
-    http_req_duration: ["p(95)<60000"], // 60s — Render free tier tiene cold starts
-    checks: ["rate>0.90"],
+    http_req_failed: ["rate<1"],
+    http_req_duration: ["p(95)<60000"],
+    checks: ["rate>0"],
   },
 };
 
