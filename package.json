@@ -1,7 +1,7 @@
 {
   "name": "stay-as-back",
   "version": "1.0.0",
-  "description": "Backend API for Stay-AS project using Express and Prisma",
+  "description": "Backend API for Stay-AS project using Express and Prisma", 
   "main": "src/server.js",
   "type": "module",
   "scripts": {

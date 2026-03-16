@@ -10,7 +10,7 @@ COPY . .
 
 RUN npx prisma generate
 
-# crear usuario seguro
+# crear usuario seguro s
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 USER appuser
