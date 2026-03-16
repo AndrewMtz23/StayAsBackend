@@ -97,7 +97,7 @@ jobs:
             --summary-export=k6-out/load-summary.json \
             tests/k6/loadtest.js
 
-      # ARTIFACT — guardar resultados
+      # ARTIFACT — guardar resultados xddd
       - name: Upload k6 summary
         if: always()
         uses: actions/upload-artifact@v4
