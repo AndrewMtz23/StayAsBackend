@@ -8,10 +8,9 @@ RUN npm install
 
 COPY . .
 
-RUN npx prisma generate
-
-# crear usuario seguro s
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN npx prisma generate && \
+    addgroup -S appgroup && \
+    adduser -S appuser -G appgroup
 
 USER appuser
 
