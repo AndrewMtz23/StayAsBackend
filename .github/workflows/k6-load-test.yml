@@ -137,6 +137,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+
             echo "Login to GHCR"
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
@@ -150,7 +151,8 @@ jobs:
             echo "Starting new container"
             docker run -d \
               --name stayas-backend \
-              -p 80:3000 \
+              -p 80:4000 \
+              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
               --restart always \
               ghcr.io/andrewmtz23/stayasbackend:latest
 
