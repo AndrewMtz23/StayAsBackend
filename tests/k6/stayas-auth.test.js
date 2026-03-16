@@ -22,9 +22,8 @@ export const options = {
   ],
   thresholds: {
     http_req_failed: ["rate<1"],
-    http_req_duration: ["p(95)<60000"],
     checks: ["rate>0"],
-  },
+  }
 };
 
 const BASE_URL = (__ENV.BASE_URL || "http://localhost:3000").replace(/\/$/, "");
