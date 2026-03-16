@@ -97,7 +97,7 @@ jobs:
             --summary-export=k6-out/load-summary.json \
             tests/k6/loadtest.js
 
-      # ARTIFACT — guardar resultados xddd
+      # ARTIFACT — guardar resultados xq no se pueden subir a Grafana Cloud
       - name: Upload k6 summary
         if: always()
         uses: actions/upload-artifact@v4
