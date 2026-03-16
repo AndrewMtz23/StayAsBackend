@@ -55,49 +55,33 @@ jobs:
       - name: Setup k6
         uses: grafana/setup-k6-action@v1
 
-      # WARM UP — despierta el servidor
-      - name: Warm up API (Render cold start)
+      - name: Warm up API
         run: |
           echo "Warming up API..."
           curl -s --max-time 60 ${{ secrets.BASE_URL }} || true
           sleep 5
 
-      # AUTH TEST
       - name: Run k6 auth test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
           TEST_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           TEST_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          K6_PROMETHEUS_RW_SERVER_URL: ${{ secrets.GRAFANA_CLOUD_URL }}
-          K6_PROMETHEUS_RW_USERNAME: ${{ secrets.GRAFANA_CLOUD_USERNAME }}
-          K6_PROMETHEUS_RW_PASSWORD: ${{ secrets.GRAFANA_CLOUD_TOKEN }}
-          K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "false"
         run: |
           mkdir -p k6-out
           k6 run \
-            --out experimental-prometheus-rw \
-            --tag testid=auth-test \
             --summary-export=k6-out/auth-summary.json \
             tests/k6/stayas-auth.test.js
 
-      # LOAD TEST
       - name: Run k6 load test
         env:
           BASE_URL: ${{ secrets.BASE_URL }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          K6_PROMETHEUS_RW_SERVER_URL: ${{ secrets.GRAFANA_CLOUD_URL }}
-          K6_PROMETHEUS_RW_USERNAME: ${{ secrets.GRAFANA_CLOUD_USERNAME }}
-          K6_PROMETHEUS_RW_PASSWORD: ${{ secrets.GRAFANA_CLOUD_TOKEN }}
-          K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM: "false"
         run: |
           k6 run \
-            --out experimental-prometheus-rw \
-            --tag testid=load-test \
             --summary-export=k6-out/load-summary.json \
             tests/k6/loadtest.js
 
-      # ARTIFACT — guardar resultados xq no se pueden subir a Grafana Cloud
       - name: Upload k6 summary
         if: always()
         uses: actions/upload-artifact@v4
@@ -106,7 +90,7 @@ jobs:
           path: k6-out
 
   # -----------------------------
-  # DOCKER — Build & Push to GHCR
+  # DOCKER — Build & Push
   # -----------------------------
   docker-build:
     name: Build and Push Docker Image
@@ -130,3 +114,5 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/andrewmtz23/stayasbackend:latest
+          build-args: |
+            DOCKER_DATABASE_URL=${{ secrets.DOCKER_DATABASE_URL }}
