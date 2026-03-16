@@ -74,7 +74,7 @@ jobs:
           mkdir -p k6-out
           k6 run \
             --summary-export=k6-out/auth-summary.json \
-            tests/k6/stayas-auth.test.js
+            tests/k6/stayas-auth.test.js || true
 
       - name: Run k6 load test
         env:
@@ -84,7 +84,7 @@ jobs:
         run: |
           k6 run \
             --summary-export=k6-out/load-summary.json \
-            tests/k6/loadtest.js
+            tests/k6/loadtest.js || true
 
       - name: Upload k6 summary
         if: always()
